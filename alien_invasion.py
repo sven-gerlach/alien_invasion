@@ -10,6 +10,9 @@ from ship import Ship
 from bullet import Bullet
 from alien import Alien
 from button_difficulty import ButtonDifficulty
+from text_input_field import InputBox
+from high_score_table import HighScoreTable
+from button_generic import ButtonGeneric
 
 
 class AlienInvasion:
@@ -23,31 +26,47 @@ class AlienInvasion:
         self.settings.screen_width = self.screen.get_rect().width
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Alien Invasion", 'AI')
-        # create an instance to store game statistics and create a scoreboard
+
+        # instantiate buttons
+        self.instantiate_buttons()
+
+        # create an instance to store game statistics, create a scoreboard, and high score table
         self.stats = GameStats(self)
         self.sb = Scoreboard(self)
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
-        # make the play button
-        self.play_button = Button(self, 'Play?')
+
+    def instantiate_buttons(self):
+        self.play_button = Button(self, "Let's Play!")
         self.button_easy_difficulty = ButtonDifficulty(self, 'Easy', (128, 128, 128), (self.settings.screen_width
-                                                                                         *1/4,
-                                                                                     self.settings.screen_height *
-                                                                                     3 /4))
+                                                                                       * 1 / 4,
+                                                                                       self.settings.screen_height *
+                                                                                       1 / 4))
         self.button_medium_difficulty = ButtonDifficulty(self, 'Medium', (128, 128, 128), (self.settings.screen_width
-                                                                                        *2/4, self.settings.screen_height *
-                                                                                     3 /4))
-        self.button_hard_difficulty = ButtonDifficulty(self, 'Hard', (128, 128, 128), (self.settings.screen_width *3/4,
-                                                                                   self.settings.screen_height *
-                                                                                     3 /4))
+                                                                                           * 2 / 4,
+                                                                                           self.settings.screen_height *
+                                                                                           1 / 4))
+        self.button_hard_difficulty = ButtonDifficulty(self, 'Hard', (128, 128, 128),
+                                                       (self.settings.screen_width * 3 / 4,
+                                                        self.settings.screen_height *
+                                                        1 / 4))
+        self.text_input_field = InputBox(self.play_button.rect.left, self.settings.screen_height * 1 / 8, 200, 50,
+                                         'Enter Name')
+        self.button_main_menue = ButtonGeneric(self, (self.settings.screen_width / 2 - 300,
+                                                      self.settings.screen_height / 2), (200, 50), (128, 128, 128),
+                                               'Main Menu', (255, 255, 255), 48)
+        self.button_continue = ButtonGeneric(self, (self.settings.screen_width / 2 + 100, self.settings.screen_height
+                                                    / 2), (200, 50), (128, 128, 128), 'Continue', (255, 255, 255), 48)
+        self.button_exit = ButtonGeneric(self, (self.settings.screen_width / 2 - 100, self.settings.screen_height *
+                                                9/10), (200, 50), (255, 0, 0), 'Exit', (255, 255, 255), 48)
 
     def run_game(self):
         """Start the main loop for the game"""
         while True:
             # watch for keyboard and mouse events.
             self._check_events()
-            if self.stats.game_active:
+            if self.stats.game_active and not self.stats.game_paused:
                 self.ship.update()
                 self._update_bullets()
                 self._update_aliens()
@@ -56,7 +75,12 @@ class AlienInvasion:
     def _check_events(self):
         """Respond to key strokes and mouse events"""
         for event in pygame.event.get():
+            # pass event to text input button
+            self.text_input_field.handle_event(event)
+
+            # test for various key and mouse events
             if event.type == pygame.QUIT:
+                self.store_high_score()
                 sys.exit()
             elif event.type == pygame.KEYDOWN:
                 self._check_keydown_events(event)
@@ -64,13 +88,18 @@ class AlienInvasion:
                 self._check_keyup_events(event)
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
-                self._check_play_button(mouse_pos)
-                self._check_difficulty_button(mouse_pos)
+                if not self.stats.game_active:
+                    self._check_play_button(mouse_pos)
+                    self._check_difficulty_button(mouse_pos)
+                    self._check_exit_button(mouse_pos)
+                if self.stats.game_active and self.stats.game_paused:
+                    self._check_main_menu_button(mouse_pos)
+                    self._check_continue_button(mouse_pos)
 
     def _check_play_button(self, mouse_pos):
         """Start a new game when the player clicks Play"""
-        button_clicked = self.play_button.rect.collidepoint(mouse_pos)
-        if button_clicked and not self.stats.game_active:
+        play_button_clicked = self.play_button.rect.collidepoint(mouse_pos)
+        if play_button_clicked and self.text_input_field.text != 'Enter Name' and self.stats.difficulty_level:
             self.settings.initialise_dynamic_settings()
             self._start_game()
 
@@ -82,14 +111,88 @@ class AlienInvasion:
             self.sb.prep_ships()
             self._create_fleet()
 
+            # get player name and call high-score
+            self.retrieve_high_score()
+
     def _check_difficulty_button(self, mouse_pos):
         """Highlight button that has been selected in a darker colour"""
         if self.button_easy_difficulty.rect.collidepoint(mouse_pos):
             self._button_easy()
+            self.stats.difficulty_level = 'Easy'
         elif self.button_medium_difficulty.rect.collidepoint(mouse_pos):
             self._button_medium()
+            self.stats.difficulty_level = 'Medium'
         elif self.button_hard_difficulty.rect.collidepoint(mouse_pos):
             self._button_hard()
+            self.stats.difficulty_level = 'Hard'
+
+    def _check_exit_button(self, mouse_pos):
+        if self.button_exit.rect.collidepoint(mouse_pos):
+            self.store_high_score()
+            sys.exit()
+
+    def _check_main_menu_button(self, mouse_pos):
+        if self.button_main_menue.rect.collidepoint(mouse_pos):
+            self.stats.game_active = not self.stats.game_active
+            self.stats.game_paused = not self.stats.game_paused
+
+    def _check_continue_button(self, mouse_pos):
+        if self.button_continue.rect.collidepoint(mouse_pos):
+            self.stats.game_paused = not self.stats.game_paused
+            pygame.mouse.set_visible(not pygame.mouse.get_visible())
+
+    def retrieve_high_score(self):
+        """Reading out high score file for player name"""
+        # obtain player name and store in game stats
+        self.stats.player_name = self.text_input_field.get_player_name()
+
+        # open high score file
+        with open('high_scores/high_scores.txt') as fo:
+            high_scores = fo.readlines()
+
+        # build dictionary from saved txt data
+        self.high_scores_dict = dict()
+        if high_scores:
+            for line in high_scores:
+                player, difficulty, score = line.strip().split(';')
+                if player in self.high_scores_dict:
+                    self.high_scores_dict[player][difficulty] = score
+                else:
+                    self.high_scores_dict[player] = dict({difficulty: score})
+
+        # search for player name and difficulty; if found, set high-score in game stats
+        try:
+            self.stats.high_score = int(self.high_scores_dict[self.stats.player_name][self.stats.difficulty_level])
+
+        except KeyError:
+            pass
+
+        else:
+            self.sb.prep_high_score()
+
+    def store_high_score(self):
+        """store player name and high-score in txt file"""
+
+        # update high score dictionary with player name and high_score
+        if self.stats.high_score > 0:
+            try:
+                if self.stats.player_name in self.high_scores_dict:
+                    self.high_scores_dict[self.stats.player_name][self.stats.difficulty_level] = self.stats.high_score
+                else:
+                    self.high_scores_dict[self.stats.player_name] = dict({self.stats.difficulty_level: self.stats.high_score})
+
+            except AttributeError:
+                pass
+
+            # write high score dictionary to txt file
+            try:
+                with open('high_scores/high_scores.txt', 'w') as fo:
+                    for player_name, values in self.high_scores_dict.items():
+                        for difficulty, score in values.items():
+                            fo.writelines(f'{player_name};{difficulty};{score}\n')
+
+            except AttributeError:
+                pass
 
     def _button_easy(self):
         self.button_easy_difficulty.update_button_color((63, 176, 20), 'Easy')
@@ -101,13 +204,13 @@ class AlienInvasion:
         self.button_easy_difficulty.update_button_color((128, 128, 128), 'Easy')
         self.button_medium_difficulty.update_button_color((244, 97, 8), 'Medium')
         self.button_hard_difficulty.update_button_color((128, 128, 128), 'Hard')
-        self.settings.speedup_scale = 1.3
+        self.settings.speedup_scale = 1.2
 
     def _button_hard(self):
         self.button_easy_difficulty.update_button_color((128, 128, 128), 'Easy')
         self.button_medium_difficulty.update_button_color((128, 128, 128), 'Medium')
         self.button_hard_difficulty.update_button_color((215, 0, 5), 'Hard')
-        self.settings.speedup_scale = 1.5
+        self.settings.speedup_scale = 1.3
 
     def _start_game(self):
         # Reset the game statistics
@@ -132,11 +235,15 @@ class AlienInvasion:
         elif event.key == pygame.K_LEFT:
             self.ship.moving_left = True
         elif event.key == pygame.K_q:
+            self.store_high_score()
             sys.exit()
-        elif event.key == pygame.K_SPACE:
+        elif event.key == pygame.K_SPACE and self.stats.game_active:
             self._fire_bullet()
         elif event.key == pygame.K_p and not self.stats.game_active:
             self._start_game()
+        elif event.key == pygame.K_ESCAPE and self.stats.game_active:
+            self.stats.game_paused = not self.stats.game_paused
+            pygame.mouse.set_visible(not pygame.mouse.get_visible())
 
     def _check_keyup_events(self, event):
         """respond to key releases"""
@@ -266,6 +373,9 @@ class AlienInvasion:
 
         else:
             self.stats.game_active = False
+            self.store_high_score()
+            self.aliens.empty()
+            self.text_input_field.reset_text_input_field()
             pygame.mouse.set_visible(True)
 
     def _check_aliens_bottom(self):
@@ -282,24 +392,36 @@ class AlienInvasion:
         self.button_easy_difficulty.draw_button()
         self.button_medium_difficulty.draw_button()
         self.button_hard_difficulty.draw_button()
+        self.text_input_field.draw(self.screen)
+        self.text_input_field.update()
+        self.button_exit.draw_button()
 
     def _update_screen(self):
         """Update images on the screen, and flip to the new screen"""
         self.screen.fill(self.settings.bg_colour)
         if self.stats.game_active:
             self.ship.blitme()
-        for bullet in self.bullets.sprites():
-            bullet.draw_bullet()
-        self.aliens.draw(self.screen)
 
-        # Draw the score information
-        self.sb.show_score()
+            for bullet in self.bullets.sprites():
+                bullet.draw_bullet()
+
+            self.aliens.draw(self.screen)
+
+            # Draw the score information
+            self.sb.show_score()
+
+        # draw two buttons, Reset and Continue, when the game is active but paused
+        if self.stats.game_active and self.stats.game_paused:
+            self.button_main_menue.draw_button()
+            self.button_continue.draw_button()
 
         # draw the play button if the game is inactive
         if not self.stats.game_active:
             self._draw_buttons()
+            self.high_score_table = HighScoreTable(self)
+
         pygame.display.flip()
-        self.fpsClock.tick(30)
+        self.fpsClock.tick(60)
 
 
 if __name__ == '__main__':
