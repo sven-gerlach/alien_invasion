@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  game:
+    build: .
+    image: game-image
+    container_name: game-app
+    volumes:
+      - type: bind
+        source: ./high_scores
+        target: /app/high_scores
+        read_only: true
