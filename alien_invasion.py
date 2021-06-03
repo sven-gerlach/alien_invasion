@@ -1,7 +1,6 @@
 """Arcade Game: Alien Invasion"""
-import sys
+import sys, pygame
 from time import sleep
-import pygame
 from settings import Settings
 from game_stats import GameStats
 from scoreboard import Scoreboard
