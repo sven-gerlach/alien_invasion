@@ -1,8 +1,3 @@
-Tom Foolerie;Easy;2000
-Jack Ass;Medium;4000
-Phuck Mae;Hard;2000
-Sven;Hard;591091
-Sven;Medium;500
-Sven;Easy;2979620
-Nina;Medium;3045275
-Olivier;Easy;12225
+Sven;Easy;6000
+Sven;Medium;4000
+Sven;Hard;5500
